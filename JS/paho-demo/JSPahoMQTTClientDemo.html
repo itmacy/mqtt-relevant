@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>paho mqtt客户端js版</title>
+    <!--
+    说明：1.The Paho JavaScript Client is an MQTT browser-based client library written in Javascript that uses WebSockets to connect to an MQTT Broker.
+        js版本的mqtt客户端是基于浏览器客户端，支持websocket的方式连接到mqtt broker
+
+        2.This requires the use of a broker that supports WebSockets natively, or the use of a gateway that can forward between WebSockets and TCP
+        在mqtt broker中，需要原生支持websocket协议，或者使用网关在websocket重定向到tcp
+
+        备注：之前在activemq中把支持该协议注释了，因此报：
+            mqtt.min.js:1 WebSocket connection to 'ws://192.168.1.40:1886/mqtt' failed:mqtt.min.js:1 WebSocket connection to 'ws://192.168.1.40:1886/mqtt' failed:
+    -->
+
+    <!--下载地址：https://www.eclipse.org/paho/clients/js/-->
+    <!--离线引入-->
+    <!--<script src="js/mqttws31.js" type="text/javascript"></script>-->
+    <script src="js/paho-mqtt.js"></script>
+
+    <!--或cdn引入-->
+    <!--<script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js" type="text/javascript"></script>-->
+
+    <!--引入格式化json字符串的工具-->
+    <script src="utils/JsonUtil.js"></script>
+
+</head>
+<body>
+    <script>
+        // Create a client instance
+        //创建client实例
+        var host = "192.168.1.40",//broker 主机
+            port = 18861,//broker端口
+            clientId = "test",//连接到broker的客户端id
+            username = "hygienecloud_activemq",
+            password = "hygienecloud@activemq456259",
+            timeout = 60,
+            keepAliveInterval = 120,
+            cleanSession = true,
+            useSSL = false,
+            subscribeTopic = "/"+clientId+"/#",//订阅的主题
+            publishTopic = "/"+clientId,//发布的主题
+            qos = 1,
+            retained = false
+            ;
+
+        client = new Paho.MQTT.Client(host, Number(port), clientId);
+
+        // set callback handlers
+        //设置回调处理
+        client.onConnectionLost = onConnectionLost;//连接丢失
+        client.onMessageArrived = onMessageArrived;//消息到达
+        client.onMessageDelivered = onMessageDelivered;//消息已发送
+
+
+        // connect the client
+        //连接
+        client.connect({
+            timeout:timeout,//设置超时时间，默认30s
+            userName:username,//连接用户名
+            password:password,//连接密码
+            willMessage: getConnectAbnormalMessage(),//当客户端连接异常时发送给服务器端
+            keepAliveInterval:keepAliveInterval,//设置心跳时间，默认60s
+            cleanSession:cleanSession,//连接成功时清除客户端与服务器端的持久状态，默认为true
+            useSSL:useSSL,
+            invocationContext:{//传递给成功或失败时的回调
+                clientId : clientId
+            },
+            onSuccess:onConnect,//当服务器端接收到连接确认时回调，形参是一个对象，包含一个字段：connectOptions（invocationContext在通过connectOptions参数传递）
+            onFailure:onConnectFail//当客户端连接失败或超时时回调，形参是一个对象，包含三个字段：connectOptions，errorCode ，errorMessage
+        });
+        
+
+        //-----------------------------连接相关事件处理
+        //获取连接异常的消息
+        function getConnectAbnormalMessage() {
+            message =new Paho.MQTT.Message("客户端"+clientId+"连接异常")
+            message.destinationName = publishTopic;
+            return message
+        }
+        
+        // called when the client connects
+        //当连接时调用
+        function onConnect(respObj) {
+//            console.log(respObj);
+            // Once a connection has been made, make a subscription and send a message.
+            //一旦连接建立，记录订阅与发布消息
+            console.log("onConnect");
+            //订阅
+            subscribe();//替换主题中的protocolType
+            //发布消息
+            sendMsg(publishTopic,"hello")//替换主题中的protocolType
+        }
+
+        //当连接失败或超时时调用
+        function onConnectFail(respObj) {
+            console.log("---connect fail or timeout：",respObj.errorMessage)
+        }
+
+        // called when the client loses its connection
+        //当丢失连接时调用
+        function onConnectionLost(respObj) {
+            if (respObj.errorCode !== 0) {
+                console.log("---onConnectionLost:"+respObj.errorMessage);
+            }
+        }
+
+        // called when a message arrives
+        //当订阅的消息到达时调用
+        function onMessageArrived(message) {
+            console.log("onMessageArrived:",prettyPrintJsonString(message.payloadString));
+            document.querySelector("#msg").innerHTML = prettyPrintJsonString(message.payloadString);
+        }
+        
+        //当消息发布成功时调用
+        function onMessageDelivered(message) {
+            console.log("---publish success：",message.payloadString)
+        }
+
+        //----------------------消息发布与订阅
+
+        //发送消息
+        function sendMsg(publishTopic,payload) {
+
+            /**
+             * send(topic, payload, qos, retained)
+             * topic:发布的主题
+             * payload：发布的内容
+             * qos ：服务质量，默认为0，0表示最多一次，1表示最少一次，2表示刚好一次
+             * retained：是否保留消息：如果为true，则消息将由服务器保留并传递到当前和将来的订阅。如果为false，则服务器只将消息传递给当前订阅服务器，默认为false
+             */
+            client.send(publishTopic,payload,qos,retained)
+        }
+        
+        //订阅
+        function subscribe() {
+            /**
+             * subscribe(filter, subscribeOptions)
+             * filter:订阅的主题
+             *
+             */
+
+            client.subscribe(subscribeTopic)
+        }
+
+        
+        //取消订阅
+        function unsubscribe() {
+
+            /**
+             * unsubscribe(filter, unsubscribeOptions)
+             * filter:取消订阅的主题
+             */
+            client.unsubscribe(subscribeTopic)
+        }
+    </script>
+
+
+    <pre id = "msg"></pre>
+
+</body>
+</html>
